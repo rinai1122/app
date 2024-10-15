@@ -1,6 +1,10 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import os
 from werkzeug.utils import secure_filename
+from PyPDF2 import PdfReader, PdfWriter
+from pydub import AudioSegment
+import shutil
+
 
 app = Flask(__name__)
 
@@ -17,59 +21,58 @@ AUDIO_FOLDER = 'audios'
 app.config['AUDIO_FOLDER'] = AUDIO_FOLDER
 
 # Create necessary folders if they don't exist
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+for folder in [UPLOAD_FOLDER, DOWNLOAD_FOLDER, AUDIO_FOLDER]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
-if not os.path.exists(DOWNLOAD_FOLDER):
-    os.makedirs(DOWNLOAD_FOLDER)
+def process_pdf(pdf_path, mp3_path, output_pdf_path):
+    """For testing: just return the exact input PDF."""
+    try:
+        # Copy the input PDF to the output location without modification
+        shutil.copy(pdf_path, output_pdf_path)
+        return True
+    except Exception as e:
+        print(f"Error copying PDF: {e}")
+        return False
 
-if not os.path.exists(AUDIO_FOLDER):
-    os.makedirs(AUDIO_FOLDER)
-
-def return_pdf(file_path):
-    return file_path
-
+# Route to render the main page
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Route to upload PDF files
-@app.route('/upload/pdf', methods=['POST'])
-def upload_pdf():
-    if 'file' not in request.files:
-        return jsonify({"message": "No file part"}), 400
-    file = request.files['file']
+# Route to handle PDF and audio upload and processing
+@app.route('/upload/process', methods=['POST'])
+def upload_and_process():
+    if 'pdf_file' not in request.files or 'audio_file' not in request.files:
+        return jsonify({"message": "PDF or audio file missing"}), 400
     
-    if file.filename == '':
-        return jsonify({"message": "No selected file"}), 400
-
-    if file and file.filename.endswith('.pdf'):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-
-        return jsonify({"message": "PDF uploaded and processed successfully."}), 200
-
-    return jsonify({"message": "File is not a PDF"}), 400
-
-# Route to upload audio files
-@app.route('/upload/audio', methods=['POST'])
-def upload_audio():
-    if 'audio_file' not in request.files:
-        return jsonify({"message": "No file part"}), 400
-    file = request.files['audio_file']
-
-    if file.filename == '':
-        return jsonify({"message": "No selected file"}), 400
-
-    if file and file.filename.endswith(('.mp3', '.wav')):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['AUDIO_FOLDER'], filename)
-        file.save(file_path)
-
-        return jsonify({"message": "Audio uploaded and processed successfully."}), 200
-
-    return jsonify({"message": "File is not an audio file"}), 400
+    pdf_file = request.files['pdf_file']
+    audio_file = request.files['audio_file']
+    
+    # Validate the PDF and audio file types
+    if pdf_file.filename == '' or not pdf_file.filename.endswith('.pdf'):
+        return jsonify({"message": "Invalid PDF file"}), 400
+    if audio_file.filename == '' or not audio_file.filename.endswith(('.mp3', '.wav')):
+        return jsonify({"message": "Invalid audio file"}), 400
+    
+    # Secure and save the uploaded files
+    pdf_filename = secure_filename(pdf_file.filename)
+    audio_filename = secure_filename(audio_file.filename)
+    pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
+    audio_path = os.path.join(app.config['AUDIO_FOLDER'], audio_filename)
+    
+    pdf_file.save(pdf_path)
+    audio_file.save(audio_path)
+    
+    # Output path for the processed PDF
+    output_pdf_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"processed_{pdf_filename}")
+    
+    # Process the PDF and audio together
+    if process_pdf(pdf_path, audio_path, output_pdf_path):
+        download_link = f"/download/{os.path.basename(output_pdf_path)}"
+        return jsonify({"message": "PDF processed successfully", "download_link": download_link}), 200
+    else:
+        return jsonify({"message": "Error processing PDF"}), 500
 
 # Route to download files
 @app.route('/download/<filename>', methods=['GET'])

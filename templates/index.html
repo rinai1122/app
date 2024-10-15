@@ -9,68 +9,54 @@
 </head>
 <body>
     <div class="container">
-        <h1>MD winners</h1>
+        <h1>MD Winners</h1>
 
-        <!-- PDF upload form -->
-        <h2>Upload a PDF</h2>
-        <form id="pdfUploadForm" enctype="multipart/form-data">
-            <input type="file" name="file" accept="application/pdf" required>
-            <button type="submit">Upload and Process PDF</button>
-        </form>
+        <!-- Combined PDF and Audio Upload Form -->
+        <h2>Upload PDF and Audio File</h2>
+        <form id="fileUploadForm" enctype="multipart/form-data">
+            <label for="pdf_file">Select a PDF:</label>
+            <input type="file" name="pdf_file" accept="application/pdf" required><br><br>
 
-        <!-- Audio upload form -->
-        <h2>Upload an Audio File</h2>
-        <form id="audioUploadForm" enctype="multipart/form-data">
-            <input type="file" name="audio_file" accept="audio/*" required>
-            <button type="submit">Upload and Process Audio</button>
+            <label for="audio_file">Select an Audio File:</label>
+            <input type="file" name="audio_file" accept="audio/*" required><br><br>
+
+            <button type="submit">Upload and Process Files</button>
         </form>
 
         <!-- Message display area -->
         <div id="message"></div>
 
-        <!-- Download button -->
-        <h2>Download a Processed PDF</h2>
-        <form action="/download/sample.pdf" method="GET">
-            <button type="submit">Download sample.pdf</button>
-        </form>
+        <!-- Download button for processed PDF -->
+        <h2>Download Processed PDF</h2>
+        <div id="downloadSection" style="display:none;">
+            <form id="downloadForm" method="GET">
+                <button id="downloadButton" type="submit">Download Processed PDF</button>
+            </form>
+        </div>
     </div>
 
     <script>
-        // Function to handle form submission with AJAX
         $(document).ready(function() {
-            // Handle PDF upload
-            $('#pdfUploadForm').submit(function(event) {
+            // Handle form submission for both PDF and Audio file
+            $('#fileUploadForm').submit(function(event) {
                 event.preventDefault(); // Prevent default form submission
                 var formData = new FormData(this);
 
+                // AJAX call to upload and process both PDF and Audio file
                 $.ajax({
-                    url: '/upload/pdf',
+                    url: '/upload/process',
                     type: 'POST',
                     data: formData,
                     contentType: false,
                     processData: false,
                     success: function(response) {
                         $('#message').html('<p style="color:green;">' + response.message + '</p>');
-                    },
-                    error: function(response) {
-                        $('#message').html('<p style="color:red;">' + response.responseJSON.message + '</p>');
-                    }
-                });
-            });
 
-            // Handle Audio upload
-            $('#audioUploadForm').submit(function(event) {
-                event.preventDefault(); // Prevent default form submission
-                var formData = new FormData(this);
-
-                $.ajax({
-                    url: '/upload/audio',
-                    type: 'POST',
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function(response) {
-                        $('#message').html('<p style="color:green;">' + response.message + '</p>');
+                        // If processing was successful, show the download button
+                        if (response.download_link) {
+                            $('#downloadForm').attr('action', response.download_link);
+                            $('#downloadSection').show();
+                        }
                     },
                     error: function(response) {
                         $('#message').html('<p style="color:red;">' + response.responseJSON.message + '</p>');
