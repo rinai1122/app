@@ -52,7 +52,7 @@ def upload_and_process():
     # Validate the PDF and audio file types
     if pdf_file.filename == '' or not pdf_file.filename.endswith('.pdf'):
         return jsonify({"message": "Invalid PDF file"}), 400
-    if audio_file.filename == '' or not audio_file.filename.endswith(('.mp3', '.wav')):
+    if audio_file.filename == '' or not audio_file.filename.endswith(('.mp3', '.wav', '.m4a')):
         return jsonify({"message": "Invalid audio file"}), 400
     
     # Secure and save the uploaded files
