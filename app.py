@@ -4,6 +4,10 @@ from werkzeug.utils import secure_filename
 from PyPDF2 import PdfReader, PdfWriter
 from pydub import AudioSegment
 import shutil
+import subprocess
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from STT.STT import transcribe_audio  # Import your audio transcription function
 
 
 app = Flask(__name__)
@@ -25,15 +29,56 @@ for folder in [UPLOAD_FOLDER, DOWNLOAD_FOLDER, AUDIO_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-def process_pdf(pdf_path, mp3_path, output_pdf_path):
-    """For testing: just return the exact input PDF."""
+# def process_pdf(pdf_path, mp3_path, output_pdf_path):
+#     """For testing: just return the exact input PDF."""
+#     try:
+#         # Copy the input PDF to the output location without modification
+#         shutil.copy(pdf_path, output_pdf_path)
+#         return True
+#     except Exception as e:
+#         print(f"Error copying PDF: {e}")
+#         return False
+
+
+def process_pdf(pdf_path, mp3_path, output_pdf_path, temp_dir):
+    """Process the audio file and create a PDF based on the transcription."""
     try:
-        # Copy the input PDF to the output location without modification
+        # Step 1: Transcribe the audio file
+        transcription = transcribe_audio(model_size=r'..\STT\fp16_ft', input_audio=mp3_path, temp_dir=temp_dir)
+
+        # Step 2: Create a text file from the transcription
+        txt_file_path = os.path.join(temp_dir, 'transcription.txt')
+        with open(txt_file_path, 'w') as txt_file:
+            for item in transcription:
+                # Assuming each item is a dictionary with a 'text' key
+                txt_file.write(item.get('text', '') + '\n')
+
+        # Step 3: Run the external script to generate JSON from the PDF and text file
+        json_output_path = './with_sent_prac.json'  # Path for the output JSON
+        command = [
+            'python', './almunai/main.py',
+            '--pdf_path', pdf_path,
+            '--text_path', txt_file_path,
+            '--save_path', json_output_path
+        ]
+        
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error running external script: {result.stderr}")
+            return False
+
+        # Step 4: Optionally: Use json_output_path to create a PDF (implement as needed)
+        # This would depend on how you want to generate the PDF from the JSON
+        # generate_pdf_from_json(json_output_path, output_pdf_path)
+
+        # Step 5: Copy the original PDF to the output path (if needed)
         shutil.copy(pdf_path, output_pdf_path)
         return True
+        
     except Exception as e:
-        print(f"Error copying PDF: {e}")
+        print(f"Error processing PDF: {e}")
         return False
+
 
 # Route to render the main page
 @app.route('/')
@@ -68,7 +113,7 @@ def upload_and_process():
     output_pdf_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"processed_{pdf_filename}")
     
     # Process the PDF and audio together
-    if process_pdf(pdf_path, audio_path, output_pdf_path):
+    if process_pdf(pdf_path, audio_path, output_pdf_path, './'):
         download_link = f"/download/{os.path.basename(output_pdf_path)}"
         return jsonify({"message": "PDF processed successfully", "download_link": download_link}), 200
     else:
